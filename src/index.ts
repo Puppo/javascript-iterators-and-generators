@@ -1,37 +1,73 @@
-function* range(start: number, end: number): Iterable<number> {
-  while (start <= end) {
-    console.log("range next");
-    yield start++;
+type User = {
+  data: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    avatar: string;
+  };
+  support: {
+    url: string;
+    text: string;
+  };
+};
+
+const getUsers = (ids: number[]): AsyncIterable<User> => {
+  return {
+    [Symbol.asyncIterator]() {
+      let i = 0;
+      return {
+        async next() {
+          console.log("getUsers next");
+          if (i === ids.length) {
+            return { done: true, value: null };
+          }
+          const data = await fetch(
+            `https://reqres.in/api/users/${ids[i++]}`
+          ).then(res => res.json());
+          return { done: false, value: data };
+        },
+      };
+    },
+  };
+};
+
+(async function () {
+  for await (const user of getUsers([1, 2, 3, 4, 5])) {
+    console.log(user);
   }
-}
+})();
 
-for (const num of range(1, 10)) {
-  console.log(num);
-}
-
-const iterator = range(1, 10)[Symbol.iterator]();
-while (true) {
-  const { done, value } = iterator.next();
-  if (done) break;
-  console.log(value);
-}
-
-for (const num of [...range(1, 10)]) {
-  console.log(num);
-}
-
-function* mapIterable<T, U>(
-  iterable: Iterable<T>,
-  callback: (value: T) => U
-): Iterable<U> {
-  for (const value of iterable) {
-    yield callback(value);
+(async function () {
+  const iterator = getUsers([1, 2, 3, 4, 5])[Symbol.asyncIterator]();
+  while (true) {
+    const { done, value } = await iterator.next();
+    if (done) break;
+    console.log(value);
   }
+})();
+
+function map<T, U>(iter: AsyncIterable<T>, fn: (v: T) => U): AsyncIterable<U> {
+  return {
+    [Symbol.asyncIterator]() {
+      const iterator = iter[Symbol.asyncIterator]();
+      return {
+        async next() {
+          console.log("map next");
+          const { done, value } = await iterator.next();
+          if (done) return { done, value: null };
+          return { done, value: fn(value) };
+        },
+      };
+    },
+  };
 }
 
-const mapRange = mapIterable(range(1, 10), value => value * 10);
-
-for (const num of mapRange) {
-  if (num > 50) break;
-  console.log(num);
-}
+(async function () {
+  for await (const num of map(
+    getUsers([1, 2, 3, 4, 5]),
+    user => user.data.id
+  )) {
+    console.log(num);
+  }
+})();
